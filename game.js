@@ -3,11 +3,22 @@ var createScene = function () {
     var scene = new BABYLON.Scene(engine);
     var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
     light.intensity = 0.7;
-    var ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 10, height: 10}, scene);
+// --- ДОБАВЛЯЕМ ЦВЕТ ЗЕМЛЕ ---
+var groundMaterial = new BABYLON.StandardMaterial("groundMat", scene);
+groundMaterial.diffuseColor = new BABYLON.Color3(0, 0.6, 0); // Зеленый цвет (не слишком яркий)
+ground.material = groundMaterial;
+// ---------------------------
 
-    // --- ПЕРСОНАЖ ---
-    var player = BABYLON.MeshBuilder.CreateBox("player", {size: 1}, scene);
-    player.position.y = 0.5;
+// --- ПЕРСОНАЖ ---
+// Создаем сферу вместо куба
+var player = BABYLON.MeshBuilder.CreateSphere("playerSphere", {diameter: 1}, scene); // Диаметр 1
+player.position.y = 0.5; // Центр сферы на высоте радиуса (0.5) над землей
+
+// Создаем красный материал для игрока
+var playerMaterial = new BABYLON.StandardMaterial("playerMat", scene);
+playerMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0); // Красный (R=1, G=0, B=0)
+player.material = playerMaterial; // Применяем материал к сфере
+// ----------------
 
     // --- КАМЕРА ---
     var camera = new BABYLON.FollowCamera("followCam", new BABYLON.Vector3(0, 10, -10), scene);
