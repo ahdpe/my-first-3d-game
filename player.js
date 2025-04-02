@@ -116,7 +116,7 @@ function createPlayer(scene) {
 
     // --- ОБНОВЛЕНИЕ КАЖДЫЙ КАДР ---
     scene.onBeforeRenderObservable.add(() => {
-        const deltaTime = engine.getDeltaTime(); // Время с прошлого кадра в мс
+const deltaTime = scene.getEngine().getDeltaTime(); // Используем scene.getEngine()
 
         // 1. Гравитация
         if (playerState !== PlayerState.JUMP_ANTICIPATION) { // Не применяем гравитацию во время подготовки
