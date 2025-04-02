@@ -1,259 +1,238 @@
-// player.js: Отвечает за создание меша игрока и его данных
+// player.js: Отвечает за создание игрока и управление им
 
-// !!! Убедитесь, что эти имена соответствуют выводу в вашей консоли !!!
-const IDLE_ANIM_NAME = "Armature|mixamo.com|Layer0";
-const WALK_ANIM_NAME = "Armature|mixamo.com|Layer0.001";
-const RUN_ANIM_NAME = "Armature|mixamo.com|Layer0.001";  // Используем ту же, что и ходьба
-const JUMP_ANIM_NAME = "Armature|mixamo.com|Layer0"; // Используем Idle как запасной вариант для прыжка
+function createPlayer(scene) {
+    // --- КОРНЕВОЙ УЗЕЛ ПЕРСОНАЖА ---
+    // Создаем пустой TransformNode как родительский объект для всех частей тела.
+    // Именно ЭТОТ узел мы будем двигать, применять гравитацию и т.д.
+    var playerRoot = new BABYLON.TransformNode("playerRoot", scene);
+    playerRoot.position.y = 1; // Начальная позиция над землей (высота туловища/2 + высота ног/2)
 
-async function createPlayer(scene) {
-    // --- ЗАГРУЗКА МОДЕЛИ ---
-    const result = await BABYLON.SceneLoader.ImportMeshAsync("", "assets/", "character.glb", scene);
-    const playerMesh = result.meshes[0];
-    playerMesh.name = "playerCharacter";
-    // playerMesh.scaling.scaleInPlace(0.1); // Раскомментируйте и подберите, если нужно масштабировать
-    playerMesh.position = new BABYLON.Vector3(0, 0, 0); // Начальная позиция
+    // --- ЧАСТИ ТЕЛА (МАТЕРИАЛЫ И РАЗМЕРЫ) ---
+    var bodyMaterial = new BABYLON.StandardMaterial("bodyMat", scene);
+    bodyMaterial.diffuseColor = new BABYLON.Color3(0.6, 0.6, 0.9); // Синеватый
 
-    // Устанавливаем Quaternion для вращения (стабильнее, чем Euler)
-    if (!playerMesh.rotationQuaternion) {
-        playerMesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(playerMesh.rotation);
-    }
+    var limbMaterial = new BABYLON.StandardMaterial("limbMat", scene);
+    limbMaterial.diffuseColor = new BABYLON.Color3(0.9, 0.6, 0.6); // Розоватый
 
-    // --- АНИМАЦИИ ---
-    console.log("Загруженные анимации:");
-    result.animationGroups.forEach(ag => console.log("- " + ag.name));
+    const torsoHeight = 1.0;
+    const torsoWidth = 0.5;
+    const torsoDepth = 0.3;
+    const headDiameter = 0.4;
+    const limbLength = 0.8; // Длина рук и ног
+    const limbThickness = 0.2; // Толщина рук и ног
 
-    const idleAnim = scene.getAnimationGroupByName(IDLE_ANIM_NAME);
-    const walkAnim = scene.getAnimationGroupByName(WALK_ANIM_NAME);
-    const runAnim = scene.getAnimationGroupByName(RUN_ANIM_NAME); // Может быть null, если имя то же, что и у walkAnim
-    const jumpAnim = scene.getAnimationGroupByName(JUMP_ANIM_NAME); // Может быть null
+    // --- СОЗДАНИЕ ЧАСТЕЙ ТЕЛА И ИХ ИЕРАРХИЯ ---
 
-    // Останавливаем все и запускаем Idle
-    result.animationGroups.forEach(ag => ag?.stop()); // Используем '?', если группа не найдена
-    let currentAnim = idleAnim;
-    currentAnim?.start(true, 1.0, currentAnim.from, currentAnim.to, false);
+    // 1. Туловище (Torso) - основной элемент, к которому крепится остальное
+    var torso = BABYLON.MeshBuilder.CreateBox("torso", {height: torsoHeight, width: torsoWidth, depth: torsoDepth}, scene);
+    torso.material = bodyMaterial;
+    torso.parent = playerRoot; // Привязываем к корневому узлу
+    // Располагаем туловище так, чтобы его низ был примерно там, где ноги крепятся
+    torso.position.y = limbLength / 2; // Смещаем вверх на половину длины ног
 
-    // --- УПРАВЛЕНИЕ ---
-    const inputMap = {};
+    // 2. Голова (Head)
+    var head = BABYLON.MeshBuilder.CreateSphere("head", {diameter: headDiameter}, scene);
+    head.material = limbMaterial; // Используем цвет конечностей для контраста
+    head.parent = torso; // Привязываем к туловищу
+    head.position.y = torsoHeight / 2 + headDiameter / 2; // Ставим на туловище
+
+    // --- Пивоты (Точки вращения) для конечностей ---
+    // Мы будем вращать эти узлы, а не сами конечности, для правильного "сустава"
+    const shoulderOffsetY = torsoHeight / 2 - limbThickness / 2;
+    const shoulderOffsetX = torsoWidth / 2;
+    const hipOffsetY = -torsoHeight / 2 + limbLength / 2; // От низа туловища
+    const hipOffsetX = torsoWidth / 4; // Ноги ближе к центру
+
+    // Пивоты плеч
+    var leftShoulderPivot = new BABYLON.TransformNode("leftShoulderPivot", scene);
+    leftShoulderPivot.parent = torso;
+    leftShoulderPivot.position = new BABYLON.Vector3(-shoulderOffsetX, shoulderOffsetY, 0);
+
+    var rightShoulderPivot = new BABYLON.TransformNode("rightShoulderPivot", scene);
+    rightShoulderPivot.parent = torso;
+    rightShoulderPivot.position = new BABYLON.Vector3(shoulderOffsetX, shoulderOffsetY, 0);
+
+    // Пивоты бедер
+    var leftHipPivot = new BABYLON.TransformNode("leftHipPivot", scene);
+    leftHipPivot.parent = torso;
+    leftHipPivot.position = new BABYLON.Vector3(-hipOffsetX, hipOffsetY, 0);
+
+    var rightHipPivot = new BABYLON.TransformNode("rightHipPivot", scene);
+    rightHipPivot.parent = torso;
+    rightHipPivot.position = new BABYLON.Vector3(hipOffsetX, hipOffsetY, 0);
+
+    // 3. Руки (Arms)
+    var leftArm = BABYLON.MeshBuilder.CreateBox("leftArm", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
+    leftArm.material = limbMaterial;
+    leftArm.parent = leftShoulderPivot; // Привязываем к пивоту плеча
+    leftArm.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
+
+    var rightArm = BABYLON.MeshBuilder.CreateBox("rightArm", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
+    rightArm.material = limbMaterial;
+    rightArm.parent = rightShoulderPivot; // Привязываем к пивоту плеча
+    rightArm.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
+
+    // 4. Ноги (Legs)
+    var leftLeg = BABYLON.MeshBuilder.CreateBox("leftLeg", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
+    leftLeg.material = limbMaterial;
+    leftLeg.parent = leftHipPivot; // Привязываем к пивоту бедра
+    leftLeg.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
+
+    var rightLeg = BABYLON.MeshBuilder.CreateBox("rightLeg", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
+    rightLeg.material = limbMaterial;
+    rightLeg.parent = rightHipPivot; // Привязываем к пивоту бедра
+    rightLeg.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
+
+
+    // --- УПРАВЛЕНИЕ (Общее состояние клавиш) ---
+    var inputMap = {};
     scene.actionManager = new BABYLON.ActionManager(scene);
+
     scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyDownTrigger, function (evt) {
-        inputMap[evt.sourceEvent.key.toLowerCase()] = true;
+        inputMap[evt.sourceEvent.key.toLowerCase()] = true; // Приводим к нижнему регистру для надежности
     }));
+
     scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, function (evt) {
         inputMap[evt.sourceEvent.key.toLowerCase()] = false;
     }));
+    // ---------------------------------------------
 
-    // --- ДАННЫЕ ДЛЯ ОБНОВЛЕНИЯ (Состояние и Конфигурация) ---
-    const playerData = {
-        mesh: playerMesh, // Сам меш
-        inputMap: inputMap, // Карта ввода
-        animations: { // Найденные анимации
-            idle: idleAnim,
-            walk: walkAnim,
-            run: runAnim ? runAnim : walkAnim, // Если нет бега, используем ходьбу
-            jump: jumpAnim,
-        },
-        state: { // Изменяемое состояние
-            verticalVelocity: 0,
-            jumpsAvailable: 2, // Начнем с 2х по умолчанию
-            isGrounded: true,
-            currentAnim: currentAnim,
-        },
-        config: { // Настройки персонажа
-            speed: 0.05,
-            gravity: -0.008,
-            jumpStrength: 0.15,
-            secondJumpStrength: 0.18,
-            sprintMultiplier: 2,
-            rotationSpeed: 0.1,
-            groundCheckOffset: 0.1,
-            maxJumps: 2,
-        }
-    };
+    // --- ПЕРЕМЕННЫЕ ДВИЖЕНИЯ, ПРЫЖКА, БЕГА ---
+    var playerSpeed = 0.05; // Сделал чуть медленнее для наглядности анимации
+    var gravity = -0.01;
+    var playerVerticalVelocity = 0;
+    var jumpStrength = 0.2;
+    var isGrounded = true;
+    var maxJumps = 2;
+    var jumpsAvailable = maxJumps;
+    var secondJumpStrength = 0.25;
+    var sprintMultiplier = 2;
+    const groundLevel = 0; // Уровень земли
+    const characterHeightOffset = limbLength / 2; // Расстояние от playerRoot (на земле) до низа туловища
+    // ----------------------------------------
 
-    // --- ОБРАБОТКА НАЖАТИЯ ПРОБЕЛА (привязываем прямо к ActionManager) ---
+    // --- ПЕРЕМЕННЫЕ ДЛЯ АНИМАЦИИ ХОДЬБЫ ---
+    var walkAnimAngle = 0; // Угол для синусоиды анимации
+    var walkAnimSpeed = 0.15; // Скорость анимации
+    var walkAnimAmplitude = Math.PI / 6; // Максимальный угол размаха рук/ног (30 градусов)
+    var isMovingHorizontally = false;
+    // --------------------------------------
+
+    // --- ОБРАБОТКА НАЖАТИЯ ПРОБЕЛА ДЛЯ ПРЫЖКА ---
     scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
-        { trigger: BABYLON.ActionManager.OnKeyDownTrigger, parameter: " " },
+        {
+            trigger: BABYLON.ActionManager.OnKeyDownTrigger,
+            parameter: " " // Пробел
+        },
         function () {
-            // Используем playerData для доступа к состоянию
-            if (playerData.state.jumpsAvailable > 0) {
-                if (playerData.state.jumpsAvailable === 1) { // Второй прыжок
-                    playerData.state.verticalVelocity = playerData.config.secondJumpStrength;
+            // Проверяем, не вводится ли текст в каком-нибудь поле
+             if (document.activeElement && document.activeElement.tagName === "INPUT") {
+                return;
+            }
+            if (jumpsAvailable > 0) {
+                if (jumpsAvailable === 1) { // Второй прыжок
+                    playerVerticalVelocity = secondJumpStrength;
                 } else { // Первый прыжок
-                    playerData.state.verticalVelocity = playerData.config.jumpStrength;
+                    playerVerticalVelocity = jumpStrength;
                 }
-                playerData.state.jumpsAvailable--;
-                playerData.state.isGrounded = false;
-
-                // !!! ЗАПУСКАЕМ АНИМАЦИЮ ПРЫЖКА ЗДЕСЬ !!!
-                if (playerData.animations.jump) {
-                     console.log(`---> Starting JUMP animation: ${playerData.animations.jump.name}`);
-                     playerData.state.currentAnim?.stop(); // Остановить текущую
-                     // Запускаем прыжок НЕ зацикленно
-                     playerData.animations.jump.start(false, 1.0, playerData.animations.jump.from, playerData.animations.jump.to, false);
-                     playerData.state.currentAnim = playerData.animations.jump; // Запоминаем, что играем прыжок
-                } else {
-                     console.warn("Jump animation not found or not assigned!");
-                }
+                jumpsAvailable--; // Тратим прыжок
+                isGrounded = false; // В воздухе после прыжка
             }
         }
     ));
+    // -------------------------------------------
 
-    // Возвращаем собранные данные об игроке
-    return playerData;
-}
+    // --- ОБНОВЛЕНИЕ КАЖДЫЙ КАДР (Гравитация, Движение, Анимация) ---
+    scene.onBeforeRenderObservable.add(() => {
+        // Гравитация
+        playerVerticalVelocity += gravity;
+        playerRoot.position.y += playerVerticalVelocity; // Двигаем корневой узел
 
-
-// --- Функция обновления состояния игрока (будет вызываться из main.js) ---
-// Теперь она принимает playerData и camera
-function updatePlayerState(playerData, camera) {
-    const { mesh, inputMap, animations, state, config } = playerData; // Деструктуризация для удобства
-
-    // 1. Простая физика и проверка земли
-    state.verticalVelocity += config.gravity;
-    mesh.position.y += state.verticalVelocity;
-
-    if (mesh.position.y < config.groundCheckOffset) {
-        mesh.position.y = 0; // Или config.groundCheckOffset? Экспериментируйте
-        state.verticalVelocity = 0;
-        if (!state.isGrounded) {
-            state.jumpsAvailable = config.maxJumps;
-        }
-        state.isGrounded = true;
-    } else {
-        state.isGrounded = false;
-    }
-
-    // 2. Горизонтальное движение
-    let moveDirectionInput = BABYLON.Vector3.Zero(); // Ввод пользователя
-    let isMoving = false;
-    let isRunning = false;
-    let currentSpeed = config.speed;
-
-    if (inputMap["shift"]) {
-        currentSpeed *= config.sprintMultiplier;
-        isRunning = true;
-    }
-
-    // Определяем направление по вводу
-    if (inputMap["arrowup"] || inputMap["w"]) { moveDirectionInput.z = 1; isMoving = true; }
-    if (inputMap["arrowdown"] || inputMap["s"]) { moveDirectionInput.z = -1; isMoving = true; }
-    if (inputMap["arrowleft"] || inputMap["a"]) { moveDirectionInput.x = -1; isMoving = true; }
-    if (inputMap["arrowright"] || inputMap["d"]) { moveDirectionInput.x = 1; isMoving = true; }
-
-    let desiredAnim = state.currentAnim; // Сохраняем текущую по умолчанию
-
-    if (isMoving) {
-        // --- Расчет движения относительно камеры ---
-        let forward = camera.getDirection(BABYLON.Vector3.Forward());
-        forward.y = 0;
-        forward.normalize();
-        let right = camera.getDirection(BABYLON.Vector3.Right());
-        right.y = 0;
-        right.normalize();
-
-        let desiredMoveDirection = forward.scale(moveDirectionInput.z).add(right.scale(moveDirectionInput.x));
-
-        // <<< DEBUG LOG >>>
-        // console.log("Raw Move Dir:", desiredMoveDirection.toString(), "Speed:", currentSpeed);
-
-        // Нормализуем и применяем скорость
-        // Важно: .normalize() изменяет вектор! Делаем копию для лога поворота
-        const rotationDirection = desiredMoveDirection.clone();
-        desiredMoveDirection.normalize().scaleInPlace(currentSpeed);
-
-        // <<< DEBUG LOG >>>
-        // console.log("Applying Move Vector:", desiredMoveDirection.toString());
-        // console.log("Position BEFORE move:", mesh.position.toString());
-
-        // Применяем движение к мешу
-        mesh.position.addInPlace(desiredMoveDirection);
-
-         // <<< DEBUG LOG >>>
-        // console.log("Position AFTER move:", mesh.position.toString());
-
-
-        // --- Поворот персонажа ---
-        if (rotationDirection.lengthSquared() > 0.001) { // Используем вектор до нормализации скорости для поворота
-            let targetAngle = Math.atan2(rotationDirection.x, rotationDirection.z);
-            let targetRotation = BABYLON.Quaternion.FromEulerAngles(0, targetAngle, 0);
-            // Используем Slerp для плавного поворота
-            mesh.rotationQuaternion = BABYLON.Quaternion.Slerp(mesh.rotationQuaternion, targetRotation, config.rotationSpeed);
-        }
-
-        // --- Выбор анимации движения ---
-        if (state.isGrounded) { // Анимацию движения меняем только на земле
-             desiredAnim = isRunning ? animations.run : animations.walk;
+        // Проверка земли и сброс прыжков
+        if (playerRoot.position.y < groundLevel) { // Если упали ниже уровня земли
+            playerRoot.position.y = groundLevel;   // Ставим точно на землю
+            playerVerticalVelocity = 0;
+            if (!isGrounded) { // Если только что приземлились
+                jumpsAvailable = maxJumps; // Восстанавливаем прыжки
+            }
+            isGrounded = true;
         } else {
-             // Если мы движемся в воздухе, возможно, нужна анимация падения?
-             // Пока оставляем ту, что была (вероятно, прыжок)
-             desiredAnim = state.currentAnim; // Не меняем анимацию в воздухе при движении
+            isGrounded = false; // Если в воздухе - не на земле
         }
 
-    } else {
-         // --- Выбор анимации стояния/падения ---
-         if (state.isGrounded) {
-             // Если стоим на земле, и текущая анимация - это прыжок (который должен был закончиться), переключаемся на Idle
-             if(state.currentAnim === animations.jump) {
-                 desiredAnim = animations.idle;
-             } else {
-                 // Иначе, если просто стоим, должна быть Idle
-                 desiredAnim = animations.idle;
-             }
-         } else {
-             // Если в воздухе и не двигаемся
-             // Если текущая анимация - прыжок, оставляем ее (она может еще играть)
-             // Если текущая анимация не прыжок (например, была Idle или Walk до прыжка),
-             // и у нас ЕСТЬ анимация прыжка - можно ее запустить как падение, или оставить Idle.
-             // Пока просто оставим текущую анимацию, если она прыжок, иначе переключим на Idle.
-             if(state.currentAnim !== animations.jump) {
-                desiredAnim = animations.idle; // Или FallAnim, если будет
-             }
-         }
-    }
+        // Горизонтальное движение (с бегом)
+        let currentSpeed = playerSpeed;
+        if (inputMap["shift"]) {
+            currentSpeed *= sprintMultiplier;
+        }
+
+        // Определяем, есть ли горизонтальное движение в этом кадре
+        let movingX = false;
+        let movingZ = false;
+
+        // Вектор движения (чтобы двигаться по диагонали с той же скоростью)
+        let moveDirection = new BABYLON.Vector3(0, 0, 0);
+
+        if (inputMap["arrowup"] || inputMap["w"] || inputMap["ц"]) {
+            moveDirection.z = 1;
+            movingZ = true;
+        }
+        if (inputMap["arrowdown"] || inputMap["s"] || inputMap["ы"]) {
+            moveDirection.z = -1;
+            movingZ = true;
+        }
+        if (inputMap["arrowleft"] || inputMap["a"] || inputMap["ф"]) {
+            moveDirection.x = -1;
+            movingX = true;
+        }
+        if (inputMap["arrowright"] || inputMap["d"] || inputMap["в"]) {
+            moveDirection.x = 1;
+            movingX = true;
+        }
+
+        isMovingHorizontally = movingX || movingZ; // Обновляем флаг движения
+
+        // Нормализуем вектор, чтобы диагональное движение не было быстрее
+        if (movingX && movingZ) {
+            moveDirection.normalize();
+        }
+
+        // Двигаем персонажа
+        playerRoot.position.x += moveDirection.x * currentSpeed;
+        playerRoot.position.z += moveDirection.z * currentSpeed;
 
 
-    // 3. Управление анимациями
-    // <<< DEBUG LOG >>>
-    // console.log(`Anim Check: Current=${state.currentAnim?.name}, Desired=${desiredAnim?.name}, Grounded=${state.isGrounded}, Moving=${isMoving}, JumpPlaying=${animations.jump?.isPlaying}`);
+        // --- Анимация Ходьбы/Бега ---
+        let currentAnimSpeed = walkAnimSpeed * (inputMap["shift"] ? sprintMultiplier : 1);
 
-    // Меняем анимацию, только если она должна измениться и существует
-    if (desiredAnim && state.currentAnim !== desiredAnim) {
-         // <<< DEBUG LOG >>>
-        // console.log(`---> Switching Anim: From ${state.currentAnim?.name} to ${desiredAnim.name}`);
-        state.currentAnim?.stop(); // Останавливаем предыдущую (если была)
+        if (isMovingHorizontally && isGrounded) {
+            // Если движемся по земле - анимируем
+            walkAnimAngle += currentAnimSpeed; // Увеличиваем угол анимации
 
-        // Запускаем новую. Idle/Walk/Run - зацикленно.
-        // Jump запускается ТОЛЬКО по нажатию пробела.
-        if (desiredAnim !== animations.jump) {
-            // <<< DEBUG LOG >>>
-             // console.log(`---> Starting loop anim: ${desiredAnim.name}`);
-             desiredAnim.start(true, 1.0, desiredAnim.from, desiredAnim.to, false);
-             state.currentAnim = desiredAnim;
+            // Вращаем пивоты конечностей по синусоиде
+            leftShoulderPivot.rotation.x = Math.sin(walkAnimAngle) * walkAnimAmplitude;
+            rightShoulderPivot.rotation.x = Math.sin(walkAnimAngle + Math.PI) * walkAnimAmplitude; // Противофаза
+            leftHipPivot.rotation.x = Math.sin(walkAnimAngle + Math.PI) * walkAnimAmplitude; // Ноги в противофазе с руками
+            rightHipPivot.rotation.x = Math.sin(walkAnimAngle) * walkAnimAmplitude;
+
         } else {
-             // Сюда попадать не должны при штатной смене, т.к. Jump запускается выше
-              console.warn("Trying to switch TO jump animation here, this shouldn't happen.");
-              state.currentAnim = desiredAnim; // Запоминаем, но не запускаем
-        }
+            // Если стоим или в воздухе - плавно возвращаем конечности в нейтральное положение
+            const lerpFactor = 0.1; // Скорость возврата
+            leftShoulderPivot.rotation.x = BABYLON.Scalar.Lerp(leftShoulderPivot.rotation.x, 0, lerpFactor);
+            rightShoulderPivot.rotation.x = BABYLON.Scalar.Lerp(rightShoulderPivot.rotation.x, 0, lerpFactor);
+            leftHipPivot.rotation.x = BABYLON.Scalar.Lerp(leftHipPivot.rotation.x, 0, lerpFactor);
+            rightHipPivot.rotation.x = BABYLON.Scalar.Lerp(rightHipPivot.rotation.x, 0, lerpFactor);
 
-    } else if (state.isGrounded && state.currentAnim === animations.jump && !animations.jump.isPlaying) {
-         // Если мы на земле, текущая анимация - прыжок, и она НЕ играет -> переключаемся на Idle
-         // <<< DEBUG LOG >>>
-         // console.log(`---> Jump anim finished playing, switching to Idle: ${animations.idle?.name}`);
-         state.currentAnim.stop(); // На всякий случай
-         desiredAnim = animations.idle;
-         if (desiredAnim) {
-             desiredAnim.start(true, 1.0, desiredAnim.from, desiredAnim.to, false);
-             state.currentAnim = desiredAnim;
-         } else {
-              state.currentAnim = null; // Если нет Idle анимации
-         }
-    } else if (desiredAnim && state.currentAnim === desiredAnim && !state.currentAnim.isPlaying) {
-        // Если нужная анимация (цикличная) уже установлена, но почему-то не играет -> перезапускаем
-        if (desiredAnim !== animations.jump) { // Не перезапускаем прыжок здесь
-            // <<< DEBUG LOG >>>
-             // console.warn(`---> Restarting non-playing loop anim: ${desiredAnim.name}`);
-             desiredAnim.start(true, 1.0, desiredAnim.from, desiredAnim.to, false);
+            // Сбрасываем угол, чтобы при старте движения анимация начиналась сначала
+            if (Math.abs(leftShoulderPivot.rotation.x) < 0.01) { // Когда почти вернулись
+                walkAnimAngle = 0;
+            }
         }
-    }
+        // --- Конец Анимации ---
+
+    });
+    // --- КОНЕЦ ОБНОВЛЕНИЯ КАЖДЫЙ КАДР ---
+
+    // Возвращаем КОРНЕВОЙ УЗЕЛ игрока. Камера и другие системы должны следить за ним.
+    return playerRoot;
 }
