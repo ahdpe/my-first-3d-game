@@ -24,20 +24,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const camera = new BABYLON.ArcRotateCamera(
         "arcCam",
-        Math.PI,                 // изначально за спиной
+        Math.PI, // alpha — изначально за спиной
         defaultCameraBeta,
         12,
         cameraTarget,
         scene
     );
 
-    // ❌ Убираем управление мышкой:
-    // camera.attachControl(canvas, true);
+    // ❌ Убираем контроль мышью
+    camera.inputs.clear();
 
-    // Блокируем изменение камеры пользователем
-    camera.inputs.clear(); // отключает все пользовательские input'ы
-
-    // Ограничения камеры
     camera.lowerBetaLimit = Math.PI / 8;
     camera.upperBetaLimit = Math.PI / 2;
     camera.lowerRadiusLimit = 4;
@@ -47,8 +43,8 @@ document.addEventListener("DOMContentLoaded", function () {
     engine.runRenderLoop(function () {
         if (!scene || !playerRoot) return;
 
-        // Всегда следим сзади
-        const targetCameraAlpha = playerRoot.rotation.y;
+        // 📌 Камера следует за спиной персонажа
+        const targetCameraAlpha = playerRoot.rotation.y + Math.PI;
         const targetCameraBeta = defaultCameraBeta;
 
         camera.alpha = BABYLON.Scalar.LerpAngle(camera.alpha, targetCameraAlpha, cameraReturnLerpSpeed);
