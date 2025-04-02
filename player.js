@@ -1,14 +1,10 @@
 // player.js: Отвечает за создание меша игрока и его данных
 
-// !!! ВАЖНО: Имена анимаций нужно взять из ВАШЕЙ консоли !!!
-// Замените "ВАШЕ_ИМЯ_IDLE", "ВАШЕ_ИМЯ_WALK" и т.д. на реальные имена
-// которые вы видите после "Загруженные анимации:", например "Armature|mixamo.com|Layer0"
-
-// Имена по умолчанию (ЗАМЕНИТЕ ИХ!)
-const IDLE_ANIM_NAME = "Armature|mixamo.com|Layer0";   // <-- ЗАМЕНИТЬ на ваше имя Idle (если есть)
-const WALK_ANIM_NAME = "Armature|mixamo.com|Layer0.001"; // <-- ЗАМЕНИТЬ на ваше имя Walk/Run
-const RUN_ANIM_NAME = "Armature|mixamo.com|Layer0.001";  // <-- ЗАМЕНИТЬ (можно то же, что и Walk, если нет отдельной)
-const JUMP_ANIM_NAME = "Armature|mixamo.com|Layer0"; // <-- ЗАМЕНИТЬ (если есть анимация прыжка)
+// !!! Убедитесь, что эти имена соответствуют выводу в вашей консоли !!!
+const IDLE_ANIM_NAME = "Armature|mixamo.com|Layer0";
+const WALK_ANIM_NAME = "Armature|mixamo.com|Layer0.001";
+const RUN_ANIM_NAME = "Armature|mixamo.com|Layer0.001";  // Используем ту же, что и ходьба
+const JUMP_ANIM_NAME = "Armature|mixamo.com|Layer0"; // Используем Idle как запасной вариант для прыжка
 
 async function createPlayer(scene) {
     // --- ЗАГРУЗКА МОДЕЛИ ---
@@ -22,7 +18,6 @@ async function createPlayer(scene) {
     if (!playerMesh.rotationQuaternion) {
         playerMesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(playerMesh.rotation);
     }
-
 
     // --- АНИМАЦИИ ---
     console.log("Загруженные анимации:");
@@ -89,13 +84,17 @@ async function createPlayer(scene) {
                 }
                 playerData.state.jumpsAvailable--;
                 playerData.state.isGrounded = false;
-                // Опционально: запустить анимацию прыжка (если есть и хотим)
-                 if (playerData.animations.jump) {
-                     playerData.state.currentAnim?.stop();
+
+                // !!! ЗАПУСКАЕМ АНИМАЦИЮ ПРЫЖКА ЗДЕСЬ !!!
+                if (playerData.animations.jump) {
+                     console.log(`---> Starting JUMP animation: ${playerData.animations.jump.name}`);
+                     playerData.state.currentAnim?.stop(); // Остановить текущую
                      // Запускаем прыжок НЕ зацикленно
                      playerData.animations.jump.start(false, 1.0, playerData.animations.jump.from, playerData.animations.jump.to, false);
-                     playerData.state.currentAnim = playerData.animations.jump;
-                 }
+                     playerData.state.currentAnim = playerData.animations.jump; // Запоминаем, что играем прыжок
+                } else {
+                     console.warn("Jump animation not found or not assigned!");
+                }
             }
         }
     ));
@@ -146,7 +145,6 @@ function updatePlayerState(playerData, camera) {
 
     if (isMoving) {
         // --- Расчет движения относительно камеры ---
-        // Получаем направление камеры (только горизонтальное)
         let forward = camera.getDirection(BABYLON.Vector3.Forward());
         forward.y = 0;
         forward.normalize();
@@ -154,56 +152,108 @@ function updatePlayerState(playerData, camera) {
         right.y = 0;
         right.normalize();
 
-        // Направление движения в мировых координатах
         let desiredMoveDirection = forward.scale(moveDirectionInput.z).add(right.scale(moveDirectionInput.x));
-        desiredMoveDirection.normalize().scaleInPlace(currentSpeed); // Нормализуем и применяем скорость
+
+        // <<< DEBUG LOG >>>
+        // console.log("Raw Move Dir:", desiredMoveDirection.toString(), "Speed:", currentSpeed);
+
+        // Нормализуем и применяем скорость
+        // Важно: .normalize() изменяет вектор! Делаем копию для лога поворота
+        const rotationDirection = desiredMoveDirection.clone();
+        desiredMoveDirection.normalize().scaleInPlace(currentSpeed);
+
+        // <<< DEBUG LOG >>>
+        // console.log("Applying Move Vector:", desiredMoveDirection.toString());
+        // console.log("Position BEFORE move:", mesh.position.toString());
 
         // Применяем движение к мешу
         mesh.position.addInPlace(desiredMoveDirection);
 
+         // <<< DEBUG LOG >>>
+        // console.log("Position AFTER move:", mesh.position.toString());
+
+
         // --- Поворот персонажа ---
-        if (desiredMoveDirection.lengthSquared() > 0.001) {
-            let targetAngle = Math.atan2(desiredMoveDirection.x, desiredMoveDirection.z);
+        if (rotationDirection.lengthSquared() > 0.001) { // Используем вектор до нормализации скорости для поворота
+            let targetAngle = Math.atan2(rotationDirection.x, rotationDirection.z);
             let targetRotation = BABYLON.Quaternion.FromEulerAngles(0, targetAngle, 0);
+            // Используем Slerp для плавного поворота
             mesh.rotationQuaternion = BABYLON.Quaternion.Slerp(mesh.rotationQuaternion, targetRotation, config.rotationSpeed);
         }
 
         // --- Выбор анимации движения ---
         if (state.isGrounded) { // Анимацию движения меняем только на земле
              desiredAnim = isRunning ? animations.run : animations.walk;
+        } else {
+             // Если мы движемся в воздухе, возможно, нужна анимация падения?
+             // Пока оставляем ту, что была (вероятно, прыжок)
+             desiredAnim = state.currentAnim; // Не меняем анимацию в воздухе при движении
         }
 
     } else {
          // --- Выбор анимации стояния/падения ---
          if (state.isGrounded) {
-             desiredAnim = animations.idle;
+             // Если стоим на земле, и текущая анимация - это прыжок (который должен был закончиться), переключаемся на Idle
+             if(state.currentAnim === animations.jump) {
+                 desiredAnim = animations.idle;
+             } else {
+                 // Иначе, если просто стоим, должна быть Idle
+                 desiredAnim = animations.idle;
+             }
          } else {
-             // Если в воздухе и не двигаемся, какая анимация? Прыжок/Падение или Idle?
-             // Если анимация прыжка уже играет (запущена по пробелу), не трогаем ее.
-             // Если она закончилась, или ее не было, можно включить Idle или спец. анимацию падения.
-             if (state.currentAnim !== animations.jump || !animations.jump.isPlaying) {
-                desiredAnim = animations.idle; // Или FallAnim, если есть
+             // Если в воздухе и не двигаемся
+             // Если текущая анимация - прыжок, оставляем ее (она может еще играть)
+             // Если текущая анимация не прыжок (например, была Idle или Walk до прыжка),
+             // и у нас ЕСТЬ анимация прыжка - можно ее запустить как падение, или оставить Idle.
+             // Пока просто оставим текущую анимацию, если она прыжок, иначе переключим на Idle.
+             if(state.currentAnim !== animations.jump) {
+                desiredAnim = animations.idle; // Или FallAnim, если будет
              }
          }
     }
 
 
     // 3. Управление анимациями
+    // <<< DEBUG LOG >>>
+    // console.log(`Anim Check: Current=${state.currentAnim?.name}, Desired=${desiredAnim?.name}, Grounded=${state.isGrounded}, Moving=${isMoving}, JumpPlaying=${animations.jump?.isPlaying}`);
+
     // Меняем анимацию, только если она должна измениться и существует
     if (desiredAnim && state.currentAnim !== desiredAnim) {
+         // <<< DEBUG LOG >>>
+        // console.log(`---> Switching Anim: From ${state.currentAnim?.name} to ${desiredAnim.name}`);
         state.currentAnim?.stop(); // Останавливаем предыдущую (если была)
-        // Запускаем новую. Idle/Walk/Run - зацикленно. Jump - нет (уже запущен выше)
+
+        // Запускаем новую. Idle/Walk/Run - зацикленно.
+        // Jump запускается ТОЛЬКО по нажатию пробела.
         if (desiredAnim !== animations.jump) {
+            // <<< DEBUG LOG >>>
+             // console.log(`---> Starting loop anim: ${desiredAnim.name}`);
              desiredAnim.start(true, 1.0, desiredAnim.from, desiredAnim.to, false);
+             state.currentAnim = desiredAnim;
+        } else {
+             // Сюда попадать не должны при штатной смене, т.к. Jump запускается выше
+              console.warn("Trying to switch TO jump animation here, this shouldn't happen.");
+              state.currentAnim = desiredAnim; // Запоминаем, но не запускаем
         }
-        state.currentAnim = desiredAnim;
-    } else if (!isMoving && state.isGrounded && state.currentAnim && !state.currentAnim.isPlaying && state.currentAnim === animations.jump) {
-        // Если мы приземлились и анимация прыжка (незацикленная) закончилась, переключаемся на Idle
-        state.currentAnim.stop();
-        desiredAnim = animations.idle;
-        if (desiredAnim) {
-            desiredAnim.start(true, 1.0, desiredAnim.from, desiredAnim.to, false);
-            state.currentAnim = desiredAnim;
+
+    } else if (state.isGrounded && state.currentAnim === animations.jump && !animations.jump.isPlaying) {
+         // Если мы на земле, текущая анимация - прыжок, и она НЕ играет -> переключаемся на Idle
+         // <<< DEBUG LOG >>>
+         // console.log(`---> Jump anim finished playing, switching to Idle: ${animations.idle?.name}`);
+         state.currentAnim.stop(); // На всякий случай
+         desiredAnim = animations.idle;
+         if (desiredAnim) {
+             desiredAnim.start(true, 1.0, desiredAnim.from, desiredAnim.to, false);
+             state.currentAnim = desiredAnim;
+         } else {
+              state.currentAnim = null; // Если нет Idle анимации
+         }
+    } else if (desiredAnim && state.currentAnim === desiredAnim && !state.currentAnim.isPlaying) {
+        // Если нужная анимация (цикличная) уже установлена, но почему-то не играет -> перезапускаем
+        if (desiredAnim !== animations.jump) { // Не перезапускаем прыжок здесь
+            // <<< DEBUG LOG >>>
+             // console.warn(`---> Restarting non-playing loop anim: ${desiredAnim.name}`);
+             desiredAnim.start(true, 1.0, desiredAnim.from, desiredAnim.to, false);
         }
     }
 }
