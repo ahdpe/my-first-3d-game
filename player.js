@@ -1,67 +1,81 @@
 // player.js: Отвечает за создание игрока и управление им
 
 function createPlayer(scene) {
-    // --- КОРНЕВОЙ УЗЕЛ ПЕРСОНАЖА ---
-    // Создаем пустой TransformNode как родительский объект для всех частей тела.
-    // Именно ЭТОТ узел мы будем двигать, применять гравитацию и т.д.
-    var playerRoot = new BABYLON.TransformNode("playerRoot", scene);
-    playerRoot.position.y = 1; // Начальная позиция над землей (высота туловища/2 + высота ног/2)
-
-    // --- ЧАСТИ ТЕЛА (МАТЕРИАЛЫ И РАЗМЕРЫ) ---
-    var bodyMaterial = new BABYLON.StandardMaterial("bodyMat", scene);
-    bodyMaterial.diffuseColor = new BABYLON.Color3(0.6, 0.6, 0.9); // Синеватый
-
-    var limbMaterial = new BABYLON.StandardMaterial("limbMat", scene);
-    limbMaterial.diffuseColor = new BABYLON.Color3(0.9, 0.6, 0.6); // Розоватый
-
+    // --- КОНСТАНТЫ ---
     const torsoHeight = 1.0;
     const torsoWidth = 0.5;
     const torsoDepth = 0.3;
     const headDiameter = 0.4;
     const limbLength = 0.8; // Длина рук и ног
     const limbThickness = 0.2; // Толщина рук и ног
+    const groundLevel = 0; // Уровень земли
+
+    // --- КОРНЕВОЙ УЗЕЛ ПЕРСОНАЖА ---
+    // Теперь playerRoot.position.y будет означать точку ОПОРЫ персонажа (уровень стоп)
+    var playerRoot = new BABYLON.TransformNode("playerRoot", scene);
+    playerRoot.position.y = groundLevel; // Ставим точку опоры на землю
+
+    // --- ЧАСТИ ТЕЛА (МАТЕРИАЛЫ) ---
+    var bodyMaterial = new BABYLON.StandardMaterial("bodyMat", scene);
+    bodyMaterial.diffuseColor = new BABYLON.Color3(0.6, 0.6, 0.9); // Синеватый
+
+    var limbMaterial = new BABYLON.StandardMaterial("limbMat", scene);
+    limbMaterial.diffuseColor = new BABYLON.Color3(0.9, 0.6, 0.6); // Розоватый
 
     // --- СОЗДАНИЕ ЧАСТЕЙ ТЕЛА И ИХ ИЕРАРХИЯ ---
+    // Координаты Y теперь отсчитываются от playerRoot (уровня стоп)
 
-    // 1. Туловище (Torso) - основной элемент, к которому крепится остальное
+    // 1. Пивоты бедер (Hip Pivots) - точка вращения ног
+    // Находятся на высоте длины ноги над точкой опоры
+    var leftHipPivot = new BABYLON.TransformNode("leftHipPivot", scene);
+    leftHipPivot.parent = playerRoot;
+    leftHipPivot.position = new BABYLON.Vector3(-torsoWidth / 4, limbLength, 0); // Ноги ближе к центру
+
+    var rightHipPivot = new BABYLON.TransformNode("rightHipPivot", scene);
+    rightHipPivot.parent = playerRoot;
+    rightHipPivot.position = new BABYLON.Vector3(torsoWidth / 4, limbLength, 0);
+
+    // 2. Ноги (Legs) - крепятся к пивотам бедер
+    // Центр ноги смещен на -limbLength / 2 относительно пивота, чтобы вращение было от бедра
+    var leftLeg = BABYLON.MeshBuilder.CreateBox("leftLeg", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
+    leftLeg.material = limbMaterial;
+    leftLeg.parent = leftHipPivot;
+    leftLeg.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
+
+    var rightLeg = BABYLON.MeshBuilder.CreateBox("rightLeg", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
+    rightLeg.material = limbMaterial;
+    rightLeg.parent = rightHipPivot;
+    rightLeg.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
+
+    // 3. Туловище (Torso) - его центр находится выше бедер на половину своей высоты
     var torso = BABYLON.MeshBuilder.CreateBox("torso", {height: torsoHeight, width: torsoWidth, depth: torsoDepth}, scene);
     torso.material = bodyMaterial;
-    torso.parent = playerRoot; // Привязываем к корневому узлу
-    // Располагаем туловище так, чтобы его низ был примерно там, где ноги крепятся
-    torso.position.y = limbLength / 2; // Смещаем вверх на половину длины ног
+    torso.parent = playerRoot; // Привязываем к корневому узлу для простоты позиционирования
+    // Позиция Y центра туловища = высота ног + половина высоты туловища
+    torso.position.y = limbLength + torsoHeight / 2;
 
-    // 2. Голова (Head)
+    // 4. Голова (Head) - крепится к туловищу
     var head = BABYLON.MeshBuilder.CreateSphere("head", {diameter: headDiameter}, scene);
-    head.material = limbMaterial; // Используем цвет конечностей для контраста
+    head.material = limbMaterial;
     head.parent = torso; // Привязываем к туловищу
-    head.position.y = torsoHeight / 2 + headDiameter / 2; // Ставим на туловище
+    // Позиция Y головы = половина высоты туловища + половина диаметра головы (относительно центра туловища)
+    head.position.y = torsoHeight / 2 + headDiameter / 2;
 
-    // --- Пивоты (Точки вращения) для конечностей ---
-    // Мы будем вращать эти узлы, а не сами конечности, для правильного "сустава"
-    const shoulderOffsetY = torsoHeight / 2 - limbThickness / 2;
-    const shoulderOffsetX = torsoWidth / 2;
-    const hipOffsetY = -torsoHeight / 2 + limbLength / 2; // От низа туловища
-    const hipOffsetX = torsoWidth / 4; // Ноги ближе к центру
+    // 5. Пивоты плеч (Shoulder Pivots) - крепятся к туловищу
+    // Рассчитываем позицию относительно центра туловища
+    const shoulderOffsetY = torsoHeight / 2 - limbThickness / 2; // Верх туловища минус половина толщины руки
+    const shoulderOffsetX = torsoWidth / 2 + limbThickness / 2; // Сбоку от туловища плюс половина толщины руки
 
-    // Пивоты плеч
     var leftShoulderPivot = new BABYLON.TransformNode("leftShoulderPivot", scene);
-    leftShoulderPivot.parent = torso;
+    leftShoulderPivot.parent = torso; // Крепим к туловищу
     leftShoulderPivot.position = new BABYLON.Vector3(-shoulderOffsetX, shoulderOffsetY, 0);
 
     var rightShoulderPivot = new BABYLON.TransformNode("rightShoulderPivot", scene);
-    rightShoulderPivot.parent = torso;
+    rightShoulderPivot.parent = torso; // Крепим к туловищу
     rightShoulderPivot.position = new BABYLON.Vector3(shoulderOffsetX, shoulderOffsetY, 0);
 
-    // Пивоты бедер
-    var leftHipPivot = new BABYLON.TransformNode("leftHipPivot", scene);
-    leftHipPivot.parent = torso;
-    leftHipPivot.position = new BABYLON.Vector3(-hipOffsetX, hipOffsetY, 0);
-
-    var rightHipPivot = new BABYLON.TransformNode("rightHipPivot", scene);
-    rightHipPivot.parent = torso;
-    rightHipPivot.position = new BABYLON.Vector3(hipOffsetX, hipOffsetY, 0);
-
-    // 3. Руки (Arms)
+    // 6. Руки (Arms) - крепятся к пивотам плеч
+    // Центр руки смещен на -limbLength / 2 относительно пивота плеча
     var leftArm = BABYLON.MeshBuilder.CreateBox("leftArm", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
     leftArm.material = limbMaterial;
     leftArm.parent = leftShoulderPivot; // Привязываем к пивоту плеча
@@ -72,24 +86,13 @@ function createPlayer(scene) {
     rightArm.parent = rightShoulderPivot; // Привязываем к пивоту плеча
     rightArm.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
 
-    // 4. Ноги (Legs)
-    var leftLeg = BABYLON.MeshBuilder.CreateBox("leftLeg", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
-    leftLeg.material = limbMaterial;
-    leftLeg.parent = leftHipPivot; // Привязываем к пивоту бедра
-    leftLeg.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
-
-    var rightLeg = BABYLON.MeshBuilder.CreateBox("rightLeg", {height: limbLength, width: limbThickness, depth: limbThickness}, scene);
-    rightLeg.material = limbMaterial;
-    rightLeg.parent = rightHipPivot; // Привязываем к пивоту бедра
-    rightLeg.position.y = -limbLength / 2; // Смещаем вниз от точки вращения
-
 
     // --- УПРАВЛЕНИЕ (Общее состояние клавиш) ---
     var inputMap = {};
     scene.actionManager = new BABYLON.ActionManager(scene);
 
     scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyDownTrigger, function (evt) {
-        inputMap[evt.sourceEvent.key.toLowerCase()] = true; // Приводим к нижнему регистру для надежности
+        inputMap[evt.sourceEvent.key.toLowerCase()] = true;
     }));
 
     scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, function (evt) {
@@ -97,8 +100,8 @@ function createPlayer(scene) {
     }));
     // ---------------------------------------------
 
-    // --- ПЕРЕМЕННЫЕ ДВИЖЕНИЯ, ПРЫЖКА, БЕГА ---
-    var playerSpeed = 0.05; // Сделал чуть медленнее для наглядности анимации
+    // --- ПЕРЕМЕННЫЕ ДВИЖЕНИЯ, ПРЫЖКА, БЕГА, ПОВОРОТА ---
+    var playerSpeed = 0.05;
     var gravity = -0.01;
     var playerVerticalVelocity = 0;
     var jumpStrength = 0.2;
@@ -107,14 +110,14 @@ function createPlayer(scene) {
     var jumpsAvailable = maxJumps;
     var secondJumpStrength = 0.25;
     var sprintMultiplier = 2;
-    const groundLevel = 0; // Уровень земли
-    const characterHeightOffset = limbLength / 2; // Расстояние от playerRoot (на земле) до низа туловища
+    var rotationLerpSpeed = 0.1; // Скорость плавного поворота (0 до 1)
+    var targetRotationY = 0;     // Целевой угол поворота по Y
     // ----------------------------------------
 
     // --- ПЕРЕМЕННЫЕ ДЛЯ АНИМАЦИИ ХОДЬБЫ ---
-    var walkAnimAngle = 0; // Угол для синусоиды анимации
-    var walkAnimSpeed = 0.15; // Скорость анимации
-    var walkAnimAmplitude = Math.PI / 6; // Максимальный угол размаха рук/ног (30 градусов)
+    var walkAnimAngle = 0;
+    var walkAnimSpeed = 0.15;
+    var walkAnimAmplitude = Math.PI / 6;
     var isMovingHorizontally = false;
     // --------------------------------------
 
@@ -125,53 +128,49 @@ function createPlayer(scene) {
             parameter: " " // Пробел
         },
         function () {
-            // Проверяем, не вводится ли текст в каком-нибудь поле
              if (document.activeElement && document.activeElement.tagName === "INPUT") {
                 return;
             }
             if (jumpsAvailable > 0) {
-                if (jumpsAvailable === 1) { // Второй прыжок
+                if (jumpsAvailable === 1) {
                     playerVerticalVelocity = secondJumpStrength;
-                } else { // Первый прыжок
+                } else {
                     playerVerticalVelocity = jumpStrength;
                 }
-                jumpsAvailable--; // Тратим прыжок
-                isGrounded = false; // В воздухе после прыжка
+                jumpsAvailable--;
+                isGrounded = false;
             }
         }
     ));
     // -------------------------------------------
 
-    // --- ОБНОВЛЕНИЕ КАЖДЫЙ КАДР (Гравитация, Движение, Анимация) ---
+    // --- ОБНОВЛЕНИЕ КАЖДЫЙ КАДР (Гравитация, Движение, Поворот, Анимация) ---
     scene.onBeforeRenderObservable.add(() => {
-        // Гравитация
+        // 1. Гравитация
         playerVerticalVelocity += gravity;
-        playerRoot.position.y += playerVerticalVelocity; // Двигаем корневой узел
+        playerRoot.position.y += playerVerticalVelocity;
 
-        // Проверка земли и сброс прыжков
-        if (playerRoot.position.y < groundLevel) { // Если упали ниже уровня земли
-            playerRoot.position.y = groundLevel;   // Ставим точно на землю
+        // 2. Проверка земли и сброс прыжков
+        if (playerRoot.position.y < groundLevel) { // Теперь проверка корректна
+            playerRoot.position.y = groundLevel;
             playerVerticalVelocity = 0;
-            if (!isGrounded) { // Если только что приземлились
-                jumpsAvailable = maxJumps; // Восстанавливаем прыжки
+            if (!isGrounded) {
+                jumpsAvailable = maxJumps;
             }
             isGrounded = true;
         } else {
-            isGrounded = false; // Если в воздухе - не на земле
+            isGrounded = false;
         }
 
-        // Горизонтальное движение (с бегом)
+        // 3. Горизонтальное движение (с бегом)
         let currentSpeed = playerSpeed;
         if (inputMap["shift"]) {
             currentSpeed *= sprintMultiplier;
         }
 
-        // Определяем, есть ли горизонтальное движение в этом кадре
+        let moveDirection = new BABYLON.Vector3(0, 0, 0);
         let movingX = false;
         let movingZ = false;
-
-        // Вектор движения (чтобы двигаться по диагонали с той же скоростью)
-        let moveDirection = new BABYLON.Vector3(0, 0, 0);
 
         if (inputMap["arrowup"] || inputMap["w"] || inputMap["ц"]) {
             moveDirection.z = 1;
@@ -190,41 +189,57 @@ function createPlayer(scene) {
             movingX = true;
         }
 
-        isMovingHorizontally = movingX || movingZ; // Обновляем флаг движения
+        isMovingHorizontally = movingX || movingZ;
 
         // Нормализуем вектор, чтобы диагональное движение не было быстрее
-        if (movingX && movingZ) {
+        // И применяем скорость
+        if (isMovingHorizontally) {
             moveDirection.normalize();
+
+            // 4. Расчет целевого угла поворота
+            // Используем atan2 для получения угла вектора движения в плоскости XZ
+            targetRotationY = Math.atan2(moveDirection.x, moveDirection.z);
+
+            // Двигаем персонажа В ЛОКАЛЬНЫХ КООРДИНАТАХ (вперед относительно его текущего поворота)
+            // Для этого нам нужен повернутый вектор
+            // Создаем кватернион поворота
+            // var targetQuaternion = BABYLON.Quaternion.FromEulerAngles(0, targetRotationY, 0);
+            // playerRoot.rotationQuaternion = BABYLON.Quaternion.Slerp(playerRoot.rotationQuaternion || BABYLON.Quaternion.Identity(), targetQuaternion, rotationLerpSpeed);
+
+            // ИЛИ Простой способ: двигать по мировым координатам, поворачивать отдельно
+            playerRoot.position.x += moveDirection.x * currentSpeed;
+            playerRoot.position.z += moveDirection.z * currentSpeed;
+
         }
 
-        // Двигаем персонажа
-        playerRoot.position.x += moveDirection.x * currentSpeed;
-        playerRoot.position.z += moveDirection.z * currentSpeed;
+        // 5. Плавный Поворот персонажа (даже если не движемся, чтобы завершить поворот)
+        // Используем LerpAngle для корректной интерполяции углов (обрабатывает переход через 360/0 градусов)
+        playerRoot.rotation.y = BABYLON.Scalar.LerpAngle(
+            playerRoot.rotation.y,
+            targetRotationY, // Целевой угол (обновляется только при движении)
+            rotationLerpSpeed
+        );
 
 
-        // --- Анимация Ходьбы/Бега ---
+        // 6. Анимация Ходьбы/Бега
         let currentAnimSpeed = walkAnimSpeed * (inputMap["shift"] ? sprintMultiplier : 1);
 
         if (isMovingHorizontally && isGrounded) {
-            // Если движемся по земле - анимируем
-            walkAnimAngle += currentAnimSpeed; // Увеличиваем угол анимации
+            walkAnimAngle += currentAnimSpeed;
 
-            // Вращаем пивоты конечностей по синусоиде
             leftShoulderPivot.rotation.x = Math.sin(walkAnimAngle) * walkAnimAmplitude;
-            rightShoulderPivot.rotation.x = Math.sin(walkAnimAngle + Math.PI) * walkAnimAmplitude; // Противофаза
-            leftHipPivot.rotation.x = Math.sin(walkAnimAngle + Math.PI) * walkAnimAmplitude; // Ноги в противофазе с руками
+            rightShoulderPivot.rotation.x = Math.sin(walkAnimAngle + Math.PI) * walkAnimAmplitude;
+            leftHipPivot.rotation.x = Math.sin(walkAnimAngle + Math.PI) * walkAnimAmplitude;
             rightHipPivot.rotation.x = Math.sin(walkAnimAngle) * walkAnimAmplitude;
 
         } else {
-            // Если стоим или в воздухе - плавно возвращаем конечности в нейтральное положение
-            const lerpFactor = 0.1; // Скорость возврата
+            const lerpFactor = 0.1;
             leftShoulderPivot.rotation.x = BABYLON.Scalar.Lerp(leftShoulderPivot.rotation.x, 0, lerpFactor);
             rightShoulderPivot.rotation.x = BABYLON.Scalar.Lerp(rightShoulderPivot.rotation.x, 0, lerpFactor);
             leftHipPivot.rotation.x = BABYLON.Scalar.Lerp(leftHipPivot.rotation.x, 0, lerpFactor);
             rightHipPivot.rotation.x = BABYLON.Scalar.Lerp(rightHipPivot.rotation.x, 0, lerpFactor);
 
-            // Сбрасываем угол, чтобы при старте движения анимация начиналась сначала
-            if (Math.abs(leftShoulderPivot.rotation.x) < 0.01) { // Когда почти вернулись
+            if (Math.abs(leftShoulderPivot.rotation.x) < 0.01) {
                 walkAnimAngle = 0;
             }
         }
@@ -233,6 +248,6 @@ function createPlayer(scene) {
     });
     // --- КОНЕЦ ОБНОВЛЕНИЯ КАЖДЫЙ КАДР ---
 
-    // Возвращаем КОРНЕВОЙ УЗЕЛ игрока. Камера и другие системы должны следить за ним.
+    // Возвращаем КОРНЕВОЙ УЗЕЛ игрока.
     return playerRoot;
 }
