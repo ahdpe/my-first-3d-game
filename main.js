@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!scene || !playerRoot) return;
 
         // Всегда следим сзади
-        const targetCameraAlpha = playerRoot.rotation.y - Math.PI;
+        const targetCameraAlpha = playerRoot.rotation.y;
         const targetCameraBeta = defaultCameraBeta;
 
         camera.alpha = BABYLON.Scalar.LerpAngle(camera.alpha, targetCameraAlpha, cameraReturnLerpSpeed);
