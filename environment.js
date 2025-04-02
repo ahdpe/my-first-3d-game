@@ -6,15 +6,18 @@ function createEnvironment(scene) {
     light.intensity = 0.7;
 
     // Создаем землю
-    var ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 10, height: 10}, scene);
+    var ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 50, height: 50}, scene); // Сделал землю побольше
 
     // Создаем и применяем материал земли
     var groundMaterial = new BABYLON.StandardMaterial("groundMat", scene);
     groundMaterial.diffuseColor = new BABYLON.Color3(0, 0.6, 0); // Зеленый цвет
+    // groundMaterial.wireframe = true; // Раскомментируйте для отладки, чтобы видеть сетку
     ground.material = groundMaterial;
 
-    // Возвращаем созданные объекты, если они понадобятся где-то еще
-    // Пока возвращаем только землю, на всякий случай
+    // Включаем проверку столкновений для земли (может понадобиться позже)
+    ground.checkCollisions = true;
+
+    // Возвращаем созданные объекты
     return {
         ground: ground
     };
