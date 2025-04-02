@@ -1,60 +1,12 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Моя Первая 3D Игра</title>
-    <style>
-        /* Стили, чтобы канвас занимал весь экран */
-        html, body {
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-        }
-        #renderCanvas {
-            width: 100%;
-            height: 100%;
-            touch-action: none; /* Для мобильных устройств */
-        }
-    </style>
-    <!-- Подключаем библиотеку Babylon.js (с официального CDN) -->
-    <script src="https://cdn.babylonjs.com/babylon.js"></script>
-    <!-- Подключаем загрузчики для моделей/текстур (на всякий случай) -->
-    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-</head>
+<!-- ... остальное содержимое head и начало body ... -->
 <body>
     <!-- Это холст, на котором будет рисоваться игра -->
     <canvas id="renderCanvas"></canvas>
 
-    <!-- Подключаем ВАШ файл с кодом игры -->
-    <script src="game.js"></script>
-
-    <!-- "Клей"-код для запуска Babylon.js -->
-    <script>
-        // Находим наш холст на странице
-        const canvas = document.getElementById("renderCanvas");
-        // Создаем движок Babylon.js
-        const engine = new BABYLON.Engine(canvas, true, { stencil: true }); // true для антиалиасинга
-
-        // --- ВАЖНО: Здесь мы предполагаем, что ваш код в game.js ---
-        // --- определяет глобальную функцию createScene          ---
-        // Если вы не меняли структуру кода из Playground, так и есть.
-
-        // Вызываем вашу функцию создания сцены (из game.js)
-        const scene = createScene(); // createScene должна быть доступна из game.js
-
-        // Запускаем цикл рендеринга (постоянное обновление картинки)
-        engine.runRenderLoop(function () {
-            if (scene) {
-                scene.render();
-            }
-        });
-
-        // Следим за изменением размера окна браузера
-        window.addEventListener("resize", function () {
-            engine.resize();
-        });
-    </script>
+    <!-- Подключаем ВАШИ файлы с кодом -->
+    <script src="environment.js"></script>
+    <script src="player.js"></script>
+    <script src="main.js"></script>
+    <!-- Старый блок <script>...</script> отсюда УДАЛЕН -->
 </body>
 </html>
