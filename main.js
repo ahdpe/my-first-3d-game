@@ -1,33 +1,38 @@
-// main.js: Основной файл, инициализирует и связывает все части
+// main.js: Основной файл, инициализирует и СВЯЗЫВАЕТ все части
 
-// Находим наш холст на странице
 const canvas = document.getElementById("renderCanvas");
-// Создаем движок Babylon.js
 const engine = new BABYLON.Engine(canvas, true, { stencil: true });
-// Создаем основную сцену
 const scene = new BABYLON.Scene(engine);
 
-// --- Функция для асинхронной инициализации ---
+// --- Асинхронная инициализация ---
 async function setupGame() {
-    // --- Создаем окружение ---
-    // Вызываем функцию из environment.js
+    // Создаем окружение
     const environmentData = createEnvironment(scene);
-    // Можно использовать environmentData.ground, если нужно
 
-    // --- Создаем игрока (ЖДЕМ ЗАВЕРШЕНИЯ ЗАГРУЗКИ) ---
-    // Вызываем асинхронную функцию из player.js и ждем результат
-    const player = await createPlayer(scene); // <<--- Используем await
+    // --- Создаем игрока (получаем его данные) ---
+    const playerData = await createPlayer(scene); // Ждем загрузки модели и получаем объект с данными
+    if (!playerData || !playerData.mesh) {
+        console.error("Не удалось создать игрока!");
+        return; // Выходим, если игрок не создан
+    }
 
-    // --- Создаем камеру ---
-    // Камера создается здесь, ПОСЛЕ того как 'player' был успешно загружен и возвращен
-    var camera = new BABYLON.FollowCamera("followCam", player.position.add(new BABYLON.Vector3(0, 10, -10)), scene); // Начальная позиция камеры относительно игрока
-    camera.radius = 8; // Дистанция от игрока
-    camera.heightOffset = 4; // Высота над игроком
-    camera.rotationOffset = 0; // 0 = вид сзади, 180 = вид спереди. Для управления лучше 0.
-    camera.cameraAcceleration = 0.05; // Плавность следования
-    camera.maxCameraSpeed = 10; // Макс скорость камеры
-    camera.lockedTarget = player; // Привязываем камеру к загруженному игроку
+    // --- Создаем камеру (ПОСЛЕ игрока) ---
+    // Используем playerData.mesh для привязки
+    const camera = new BABYLON.FollowCamera("followCam", playerData.mesh.position.clone(), scene);
+    camera.radius = 8;
+    camera.heightOffset = 4;
+    camera.rotationOffset = 0; // 0 для вида сзади
+    camera.cameraAcceleration = 0.05;
+    camera.maxCameraSpeed = 10;
+    camera.lockedTarget = playerData.mesh; // Привязываем к мешу игрока
     camera.attachControl(canvas, true);
+
+    // --- Регистрируем ОБНОВЛЕНИЕ ИГРОКА в цикле рендера ---
+    // Теперь у нас есть и playerData, и camera
+    scene.onBeforeRenderObservable.add(() => {
+        // Вызываем функцию обновления из player.js, передавая ей данные и камеру
+        updatePlayerState(playerData, camera);
+    });
 
     // --- Запускаем цикл рендеринга ---
     engine.runRenderLoop(function () {
@@ -42,7 +47,7 @@ async function setupGame() {
     });
 }
 
-// --- Запускаем асинхронную инициализацию ---
+// --- Запуск ---
 setupGame().catch(error => {
-    console.error("Ошибка при инициализации игры:", error);
+    console.error("Критическая ошибка при инициализации игры:", error);
 });
