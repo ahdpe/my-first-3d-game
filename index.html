@@ -4,35 +4,16 @@
     <meta charset="UTF-8">
     <title>Моя Первая 3D Игра</title>
     <style>
-        /* Стили, чтобы канвас занимал весь экран */
-        html, body {
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-        }
-        #renderCanvas {
-            width: 100%;
-            height: 100%;
-            touch-action: none; /* Для мобильных устройств */
-            outline: none; /* Убрать синюю рамку при клике */
-        }
+        html, body { overflow: hidden; width: 100%; height: 100%; margin: 0; padding: 0; }
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; outline: none; }
     </style>
-
-    <!-- 1. Подключаем библиотеку Babylon.js и загрузчики -->
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-
 </head>
 <body>
-    <!-- 2. Холст для игры -->
     <canvas id="renderCanvas"></canvas>
-
-    <!-- 3. Подключаем ВАШИ файлы с кодом игры (порядок важен!) -->
     <script src="environment.js"></script>
-    <script src="player.js"></script>
+    <script src="player.js"></script> <!-- Убедитесь, что этот файл существует и загружается ДО main.js -->
     <script src="main.js"></script>
-
 </body>
 </html>
