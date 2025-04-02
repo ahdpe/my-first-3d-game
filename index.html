@@ -20,17 +20,16 @@
         }
     </style>
 
-    <!-- 1. Подключаем библиотеку Babylon.js и загрузчики ЗДЕСЬ, в HEAD -->
+    <!-- 1. Подключаем библиотеку Babylon.js и загрузчики -->
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
 </head>
 <body>
-    <!-- 2. Это холст, на котором будет рисоваться игра -->
+    <!-- 2. Холст для игры -->
     <canvas id="renderCanvas"></canvas>
 
-    <!-- 3. Подключаем ВАШИ файлы с кодом игры ЗДЕСЬ, в конце BODY -->
-    <!-- Порядок важен: сначала зависимости, потом основной файл -->
+    <!-- 3. Подключаем ВАШИ файлы с кодом игры (порядок важен!) -->
     <script src="environment.js"></script>
     <script src="player.js"></script>
     <script src="main.js"></script>
