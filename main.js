@@ -1,5 +1,3 @@
-// main.js: Основной файл, инициализирует и связывает все части
-
 document.addEventListener("DOMContentLoaded", function () {
 
     const canvas = document.getElementById("renderCanvas");
@@ -21,66 +19,40 @@ document.addEventListener("DOMContentLoaded", function () {
     const cameraTarget = playerData.cameraTarget;
 
     // --- Камера ---
-    const defaultCameraBeta = Math.PI / 3.5; // Угол наклона камеры по умолчанию
-    const cameraReturnLerpSpeed = 0.08;   // Скорость возврата камеры
-    const cameraReturnDelay = 1000;       // Задержка возврата в миллисекундах (1 секунда)
+    const defaultCameraBeta = Math.PI / 3.5;
+    const cameraReturnLerpSpeed = 0.08;
 
-    var camera = new BABYLON.ArcRotateCamera(
+    const camera = new BABYLON.ArcRotateCamera(
         "arcCam",
-        Math.PI,                 // <<-- теперь камера изначально за спиной
+        Math.PI,                 // изначально за спиной
         defaultCameraBeta,
         12,
         cameraTarget,
         scene
     );
 
-    camera.attachControl(canvas, true);
-    camera.inputs.attached.pointers.buttons = [0];
+    // ❌ Убираем управление мышкой:
+    // camera.attachControl(canvas, true);
 
+    // Блокируем изменение камеры пользователем
+    camera.inputs.clear(); // отключает все пользовательские input'ы
+
+    // Ограничения камеры
     camera.lowerBetaLimit = Math.PI / 8;
-    camera.upperBetaLimit = (Math.PI / 2);
+    camera.upperBetaLimit = Math.PI / 2;
     camera.lowerRadiusLimit = 4;
     camera.upperRadiusLimit = 25;
-    camera.wheelPrecision = 50;
-    camera.pinchPrecision = 100;
-
-    // --- Логика возврата камеры ---
-    let isUserInteractingWithCamera = false;
-    let returnTimeoutId = null;
-
-    function startReturnTimeout() {
-        clearTimeout(returnTimeoutId);
-        returnTimeoutId = setTimeout(() => {
-            isUserInteractingWithCamera = false;
-        }, cameraReturnDelay);
-    }
-
-    camera.onPointerDown = function () {
-        isUserInteractingWithCamera = true;
-        clearTimeout(returnTimeoutId);
-    };
-
-    camera.onPointerUp = function () {
-        startReturnTimeout();
-    };
-
-    canvas.addEventListener('pointerleave', function () {
-        if (camera.inertialAlphaOffset === 0 && camera.inertialBetaOffset === 0) {
-            startReturnTimeout();
-        }
-    });
 
     // --- Цикл рендеринга ---
     engine.runRenderLoop(function () {
         if (!scene || !playerRoot) return;
 
-        if (!isUserInteractingWithCamera) {
-            const targetCameraAlpha = playerRoot.rotation.y - Math.PI;
-            const targetCameraBeta = defaultCameraBeta;
+        // Всегда следим сзади
+        const targetCameraAlpha = playerRoot.rotation.y - Math.PI;
+        const targetCameraBeta = defaultCameraBeta;
 
-            camera.alpha = BABYLON.Scalar.LerpAngle(camera.alpha, targetCameraAlpha, cameraReturnLerpSpeed);
-            camera.beta = BABYLON.Scalar.Lerp(camera.beta, targetCameraBeta, cameraReturnLerpSpeed);
-        }
+        camera.alpha = BABYLON.Scalar.LerpAngle(camera.alpha, targetCameraAlpha, cameraReturnLerpSpeed);
+        camera.beta = BABYLON.Scalar.Lerp(camera.beta, targetCameraBeta, cameraReturnLerpSpeed);
 
         scene.render();
     });
